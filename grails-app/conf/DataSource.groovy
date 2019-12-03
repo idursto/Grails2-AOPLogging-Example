@@ -19,7 +19,11 @@ environments {
     development {
         dataSource {
             dbCreate = "create-drop" // one of 'create', 'create-drop', 'update', 'validate', ''
-            url = "jdbc:h2:mem:devDb;MVCC=TRUE;LOCK_TIMEOUT=10000;DB_CLOSE_ON_EXIT=FALSE"
+            driverClassName = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+            url = "jdbc:sqlserver://{SQL_SERVER_HERE};databaseName=aopLogging"
+            username = "{USER_HERE}" // please override this in your private config to use your own account.
+            password = "{PASSWORD_HERE}"
+            pooled = true
         }
     }
     test {
