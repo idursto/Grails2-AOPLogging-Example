@@ -1,9 +1,9 @@
 package grails2.example.performanceLogging
 
-
 import org.apache.log4j.AppenderSkeleton
 import org.apache.log4j.spi.LoggingEvent
 import org.hibernate.SessionFactory
+import org.hibernate.SharedSessionContract
 import org.springframework.context.ApplicationContext
 import org.springframework.context.ApplicationContextAware 
 
@@ -62,15 +62,25 @@ public class CustomJDBCAppender extends AppenderSkeleton implements ApplicationC
 	@Override
 	protected void append(LoggingEvent event) {
 
+		def analyticsLoggingObject = event?.getMessage() as Map
+		
+		// Quick/Minimal Validation on the Object
+		if (!analyticsLoggingObject || !analyticsLoggingObject.application || !analyticsLoggingObject.class_name || !analyticsLoggingObject.method) {
+			return;
+		}
+		
+		Boolean openedJdbcSession = false
+		SharedSessionContract jdbcSession = tryGetCurrentSession(sessionFactory)
+		
+		// If we are running async in a separate thread than our grails/spring MVC application we have to maintain our own Hibernate session for that thread.
+		if (!jdbcSession) {
+			jdbcSession = sessionFactory.openStatelessSession()
+			openedJdbcSession = true
+		}
+		
 		try
 		{
-			def analyticsLoggingObject = (Map)event.getMessage()
-			// Quick/Minimal Validation on the Object
-			if (!analyticsLoggingObject || !analyticsLoggingObject.application || !analyticsLoggingObject.class_name || !analyticsLoggingObject.method) {
-				return;
-			}
-			
-			sessionFactory.currentSession.createSQLQuery( hSql )
+			jdbcSession.createSQLQuery( hSql )
 			.setParameter( "version", "1" )
 			.setParameter( "application", analyticsLoggingObject.application )
 			.setParameter( "class_name", analyticsLoggingObject.class_name )
@@ -82,6 +92,20 @@ public class CustomJDBCAppender extends AppenderSkeleton implements ApplicationC
 		catch(Exception e)
 		{
 			e.printStackTrace();
+		}
+		finally {
+			if (openedJdbcSession) {
+				jdbcSession.close()
+			}
+		}
+	}
+	
+	private SharedSessionContract tryGetCurrentSession(SessionFactory inSessionFactory) {
+		try {
+			return inSessionFactory.getCurrentSession()
+		}
+		catch (org.hibernate.HibernateException he) {
+			return null
 		}
 	}
 }
